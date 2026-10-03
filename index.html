@@ -96,7 +96,13 @@ html,body{background:var(--cream);font-family:'Cairo',sans-serif;color:var(--ink
 .wish-star[data-text]{width:10px;height:10px;background:#FFE9B8;box-shadow:0 0 10px 3px rgba(255,220,150,.7);pointer-events:auto;cursor:pointer}
 .wish-star[data-text]::before{content:'';position:absolute;inset:-15px;border-radius:50%}
 .wish-star.active{background:#fff;box-shadow:0 0 16px 7px rgba(255,236,196,.95)}
-.wish-read{text-align:center;font-size:14px;font-weight:600;color:var(--ink-soft);min-height:46px;margin-bottom:14px;line-height:1.7;padding:10px 12px;background:#fff;border:1px solid rgba(193,122,90,.25);border-radius:12px;display:flex;align-items:center;justify-content:center}
+.wish-read{text-align:center;font-size:12.5px;color:var(--ink-soft);min-height:22px;margin-bottom:12px;line-height:1.7;padding:0 6px}
+.sky-wrap{position:relative}
+.wish-bubble{position:absolute;left:0;top:0;width:max-content;max-width:190px;padding:8px 12px;background:#fff;color:var(--ink);font-size:13px;font-weight:600;line-height:1.6;text-align:center;border-radius:12px;box-shadow:0 8px 22px rgba(42,33,26,.28);opacity:0;pointer-events:none;transition:opacity .2s;z-index:5}
+.wish-bubble.show{opacity:1}
+.wish-bubble::after{content:'';position:absolute;left:calc(50% + var(--ax,0px));width:10px;height:10px;background:#fff;transform:translateX(-50%) rotate(45deg)}
+.wish-bubble.above::after{bottom:-5px}
+.wish-bubble.below::after{top:-5px}
 @keyframes twinkle{0%,100%{opacity:.45;transform:scale(1)}50%{opacity:1;transform:scale(1.35)}}
 .wish-form{display:flex;gap:8px}
 .wish-input{flex:1;border:1.5px solid var(--blush);background:var(--white);border-radius:11px;padding:11px 13px;font-family:'Cairo',sans-serif;font-size:13.5px;color:var(--ink);outline:none;transition:border-color .2s}
@@ -202,7 +208,7 @@ html,body{background:var(--cream);font-family:'Cairo',sans-serif;color:var(--ink
     <div class="wishes-box">
       <div class="wishes-title">✦ أمنية في السماء ✦</div>
       <div class="wishes-sub">اكتب أمنية قصيرة لمحمد وسارة<br>هتتحول لنجمة بتطفو في سماء الدعوة</div>
-      <div class="wishes-sky" id="wishesSky"></div>
+      <div class="sky-wrap"><div class="wishes-sky" id="wishesSky"></div><div class="wish-bubble" id="wishBubble"></div></div>
       <div class="wish-read" id="wishRead">اضغط على أي نجمة عشان تقرأ أمنيتها</div>
       <div class="wish-form">
         <input type="text" class="wish-input" id="wishInput" placeholder="أكتب أمنيتك هنا..." maxlength="55">
@@ -226,7 +232,7 @@ html,body{background:var(--cream);font-family:'Cairo',sans-serif;color:var(--ink
 <script>
 function breakSeal(){
   var seal=document.getElementById('seal'),env=document.getElementById('envelope'),screen=document.getElementById('envelopeScreen'),inv=document.getElementById('invitation'),fab=document.getElementById('musicFab');
-  seal.classList.add('broken');env.classList.add('opened');var au=document.getElementById('audio');au.play().then(function(){playing=true;fab.classList.add('playing')}).catch(function(){});
+  seal.classList.add('broken');env.classList.add('opened');var au=document.getElementById('audio');wantMusic=true;au.play().then(function(){playing=true;fab.classList.add('playing')}).catch(function(){});
   for(var i=0;i<16;i++){setTimeout(function(){spawnPetal(window.innerWidth/2+(Math.random()-0.5)*70,window.innerHeight/2-10)},i*35)}
   setTimeout(function(){screen.classList.add('opened');inv.classList.add('visible');fab.classList.add('show');setTimeout(observeSections,350)},850)
 }
@@ -262,16 +268,29 @@ var wishList=[],lastSend=0,activeId=null;
 function hashStr(t){var h=2166136261;for(var i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 function rnd(seed,n){var x=Math.sin(seed*12.9898+n*78.233)*43758.5453;return x-Math.floor(x)}
 function showWish(t){document.getElementById('wishRead').textContent='\u2726 '+t+' \u2726'}
+function showBubble(star,text){
+  var b=document.getElementById('wishBubble'),sky=document.getElementById('wishesSky');
+  b.textContent=text;b.style.left='0px';b.style.top='0px';b.classList.remove('above','below');
+  var sw=sky.clientWidth,bw=b.offsetWidth,bh=b.offsetHeight;
+  var sx=star.offsetLeft+star.offsetWidth/2,sy=star.offsetTop+star.offsetHeight/2;
+  var left=Math.min(Math.max(sx,bw/2+4),sw-bw/2-4),above=sy>bh+24;
+  b.style.left=(left-bw/2)+'px';b.style.top=(above?sy-bh-14:sy+14)+'px';
+  b.style.setProperty('--ax',Math.max(-(bw/2-14),Math.min(bw/2-14,sx-left))+'px');
+  b.classList.add(above?'above':'below','show')
+}
+function hideBubble(){var b=document.getElementById('wishBubble');if(b)b.classList.remove('show');activeId=null;var all=document.querySelectorAll('.wish-star.active');for(var k=0;k<all.length;k++)all[k].classList.remove('active')}
+document.addEventListener('click',function(e){if(!e.target.closest||!e.target.closest('.wish-star[data-text]'))hideBubble()});
 function renderWishes(list){
   if(list)wishList=list;
-  var sky=document.getElementById('wishesSky');sky.innerHTML='';
+  var sky=document.getElementById('wishesSky'),activeEl=null,activeText='';sky.innerHTML='';
   wishList.forEach(function(w){
     var seed=hashStr(w.id||w.text),star=document.createElement('div');
     star.className='wish-star';star.style.left=(7+rnd(seed,1)*86)+'%';star.style.top=(8+rnd(seed,2)*78)+'%';
     star.style.animationDelay=(rnd(seed,3)*2.8)+'s';star.dataset.text=w.text;
-    if((w.id||w.text)===activeId)star.classList.add('active');star.onclick=function(){activeId=w.id||w.text;var all=sky.querySelectorAll('.wish-star.active');for(var k=0;k<all.length;k++)all[k].classList.remove('active');star.classList.add('active');showWish(w.text)};sky.appendChild(star)
+    if((w.id||w.text)===activeId)star.classList.add('active');if((w.id||w.text)===activeId){activeEl=star;activeText=w.text}star.onclick=function(){activeId=w.id||w.text;var all=sky.querySelectorAll('.wish-star.active');for(var k=0;k<all.length;k++)all[k].classList.remove('active');star.classList.add('active');showBubble(star,w.text)};sky.appendChild(star)
   });
   for(var i=0;i<7;i++){var star=document.createElement('div');star.className='wish-star';star.style.left=(4+rnd(i+500,1)*92)+'%';star.style.top=(6+rnd(i+500,2)*82)+'%';star.style.width='2.5px';star.style.height='2.5px';star.style.opacity='0.3';star.style.animationDelay=(rnd(i+500,3)*3.5)+'s';sky.appendChild(star)}
+  if(activeEl)showBubble(activeEl,activeText);else hideBubble()
 }
 function sendWish(){
   var input=document.getElementById('wishInput'),text=input.value.trim();if(!text)return;
@@ -286,13 +305,24 @@ function sendWish(){
 document.getElementById('wishInput').addEventListener('keydown',function(e){if(e.key==='Enter')sendWish()});
 renderWishes([]);
 
-var playing=false;
+var playing=false,wantMusic=false;
 function toggleMusic(){
   var a=document.getElementById('audio'),fab=document.getElementById('musicFab');
   if(!a.src||a.src===''||a.src.endsWith(location.pathname)){alert('ضع ملف موسيقى باسم music.mp3 بجانب ملف الدعوة');return}
-  if(!playing){a.play().then(function(){playing=true;fab.classList.add('playing')}).catch(function(){})}
-  else{a.pause();playing=false;fab.classList.remove('playing')}
+  if(!playing){wantMusic=true;a.play().then(function(){playing=true;fab.classList.add('playing')}).catch(function(){})}
+  else{wantMusic=false;a.pause();playing=false;fab.classList.remove('playing')}
 }
+(function(){
+  var a=document.getElementById('audio'),fab=document.getElementById('musicFab');
+  a.addEventListener('play',function(){playing=true;fab.classList.add('playing')});
+  a.addEventListener('pause',function(){playing=false;fab.classList.remove('playing')});
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&wantMusic&&a.paused)a.play().catch(function(){})});
+  if('mediaSession' in navigator){
+    try{navigator.mediaSession.metadata=new MediaMetadata({title:'Mohamed \u2665 Sara',artist:'Wedding Invitation'});
+    navigator.mediaSession.setActionHandler('play',function(){wantMusic=true;a.play()});
+    navigator.mediaSession.setActionHandler('pause',function(){wantMusic=false;a.pause()})}catch(e){}
+  }
+})();
 </script>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
